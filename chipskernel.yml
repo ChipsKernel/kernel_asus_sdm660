@@ -22,7 +22,7 @@ steps:
         from_secret: nToken
       my_id:
         from_secret: my_id
-      is_test: false
+      is_test: true
     commands:
       - wget https://raw.githubusercontent.com/najahiiii/Noob-Script/noob/ci/drone/chipskernel
       - chmod +x chipskernel
@@ -44,7 +44,7 @@ steps:
         from_secret: nToken
       my_id:
         from_secret: my_id
-      is_test: false
+      is_test: true
     commands:
       - wget https://raw.githubusercontent.com/najahiiii/Noob-Script/noob/ci/drone/chipskernel-gcc
       - chmod +x chipskernel-gcc
