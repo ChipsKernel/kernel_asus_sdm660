@@ -1080,7 +1080,7 @@ static int smb2_batt_get_prop(struct power_supply *psy,
 					      BATT_PROFILE_VOTER);
 		break;
 	case POWER_SUPPLY_PROP_TECHNOLOGY:
-		val->intval = POWER_SUPPLY_TECHNOLOGY_LION;
+		val->intval = POWER_SUPPLY_TECHNOLOGY_LIPO;
 		break;
 	case POWER_SUPPLY_PROP_CHARGE_DONE:
 		rc = smblib_get_prop_batt_charge_done(chg, val);
@@ -2161,6 +2161,7 @@ static struct smb_irq_info smb2_irqs[] = {
 	[SWITCH_POWER_OK_IRQ] = {
 		.name		= "switcher-power-ok",
 		.handler	= smblib_handle_switcher_power_ok,
+		.wake		= true,
 		.storm_data	= {true, 1000, 8},
 	},
 };
@@ -2342,7 +2343,7 @@ static void smb2_create_debugfs(struct smb2 *chip)
 #endif
 
 /* Huaqin add for ZQL1650-281 by diganyun at 2018/02/08 start */
-#define ATD_CHG_LIMIT_SOC	70
+#define ATD_CHG_LIMIT_SOC	100
 int charger_limit_enable_flag = 0;
 int charger_limit_value = 0;
 static char charger_limit[8] = "0";
@@ -2352,7 +2353,8 @@ extern int asus_get_prop_batt_capacity(struct smb_charger *chg);
 #define CHARGER_LIMIT_EN_PROC_FILE     "driver/charger_limit_enable"
 #define CHARGER_LIMIT_PROC_FILE     "driver/charger_limit"
 
- ssize_t charger_limit_enbale_read_proc(struct file *file, char __user *page, size_t size, loff_t *ppos)
+ssize_t charger_limit_enable_read_proc(struct file *file, char __user *page,
+					size_t size, loff_t *ppos)
 {
 	char read_data[8]={0};
 	int len = 0;
@@ -2373,56 +2375,60 @@ extern int asus_get_prop_batt_capacity(struct smb_charger *chg);
 	return len;
 }
 
-static ssize_t charger_limit_enbale_write_proc(struct file *file, const char __user *buff, size_t size, loff_t *ppos)
-{	char wtire_data[32] = {0};
+static ssize_t charger_limit_enable_write_proc(struct file *file,
+						const char __user *buff,
+						size_t size, loff_t *ppos)
+{
+	char write_data[32] = {0};
 	int rc;
 	int soc;
-	bool do_it,online;
+	bool do_it, online;
 	union power_supply_propval pval = {0, };
 	smblib_get_prop_usb_online(smbchg_dev, &pval);
 	online = pval.intval;
 
 	if (size >= 32)
 		return -EFAULT;
-	if (copy_from_user( &wtire_data, buff, size ))
+	if (copy_from_user(&write_data, buff, size))
 		return -EFAULT;
 	#if 0
-	if (limit_chip == NULL){
+	if (limit_chip == NULL) {
 		printk("byr_: %s, limit_chip == NULL !!!\n", __func__);
 		return -EFAULT;
 	}
 	#endif
 
-	if (wtire_data[0] == '1'){
+	if (write_data[0] == '1') {
 		charger_limit_enable_flag = 1;
-		soc =asus_get_prop_batt_capacity(smbchg_dev);
+		soc = asus_get_prop_batt_capacity(smbchg_dev);
 		do_it = charger_limit_value < soc;
-		if(do_it ){
+		if (do_it) {
 			rc = smblib_masked_write(smbchg_dev, CHARGING_ENABLE_CMD_REG, CHARGING_ENABLE_CMD_BIT, 1);
-			if(online)
+			if (online)
 				power_supply_changed(smbchg_dev->batt_psy);
 		}
 		printk("%s,  write enbale 1 soc = %d, limit-value= %d! \n", __func__, soc, charger_limit_value);
-			}
-	else{
+		} else {
 		charger_limit_enable_flag = 0;
 		rc = smblib_masked_write(smbchg_dev, CHARGING_ENABLE_CMD_REG, CHARGING_ENABLE_CMD_BIT, 0);
-		if(online)
+		if (online)
 			power_supply_changed(smbchg_dev->batt_psy);
 		printk("%s, write enbale 0,no limit ,charging !!  \n", __func__);
-    }
+	}
 	printk("%s, ****************  charger_limit_enable_flag = %d\n", __func__, charger_limit_enable_flag);
 
 	return size;
 }
 
 static const struct file_operations charger_limit_enbale_proc_ops = {
-    .read = charger_limit_enbale_read_proc,
-    .write = charger_limit_enbale_write_proc,
+    .read = charger_limit_enable_read_proc,
+    .write = charger_limit_enable_write_proc,
 };
 
- ssize_t charger_limit_read_proc(struct file *file, char __user *page, size_t size, loff_t *ppos)
- {
+ssize_t charger_limit_read_proc(struct file *file,
+				char __user *page,
+				size_t size, loff_t *ppos)
+{
 	char read_data[8]={0};
 	int len = 0;
 	int rc;
@@ -2440,11 +2446,13 @@ static const struct file_operations charger_limit_enbale_proc_ops = {
 	*ppos += len;
 
 	return len;
- }
+}
 
-static ssize_t charger_limit_write_proc(struct file *file, const char __user *buff, size_t size, loff_t *ppos)
+static ssize_t charger_limit_write_proc(struct file *file,
+					const char __user *buff,
+					size_t size, loff_t *ppos)
 {
-	char wtire_data[8] = {0};
+	char write_data[8] = {0};
 	int soc;
 	bool do_it,online;
 	union power_supply_propval pval = {0, };
@@ -2454,12 +2462,13 @@ static ssize_t charger_limit_write_proc(struct file *file, const char __user *bu
 	if (size >= 32)
 		return -EFAULT;
 
-	if (copy_from_user( &wtire_data, buff, size ))
+	if (copy_from_user(&write_data, buff, size))
 		return -EFAULT;
-	if (wtire_data[0] == '0'){
-		memset(charger_limit,0,8) ;
-	}else{
-		memcpy(charger_limit,wtire_data,8);
+
+	if (write_data[0] == '0') {
+		memset(charger_limit,0,8);
+	} else {
+		memcpy(charger_limit,write_data,8);
 	}
 
 	charger_limit_value = (int)simple_strtol(charger_limit,NULL,10);
@@ -2471,19 +2480,19 @@ static ssize_t charger_limit_write_proc(struct file *file, const char __user *bu
 	charger_limit_enable_flag = !!charger_limit_value;
 	if (!charger_limit_enable_flag) {
 		smblib_masked_write(smbchg_dev, CHARGING_ENABLE_CMD_REG, CHARGING_ENABLE_CMD_BIT, 0);
-		if(online)
+		if (online)
 			power_supply_changed(smbchg_dev->batt_psy);
-	} else  {
+	} else {
 		do_it = charger_limit_value < soc;
-		if(do_it){
+		if (do_it) {
 			smblib_masked_write(smbchg_dev, CHARGING_ENABLE_CMD_REG, CHARGING_ENABLE_CMD_BIT, 1);
-			if(online)
+			if (online)
 				power_supply_changed(smbchg_dev->batt_psy);
 		}
 	}
 
 	printk(" %s, limit-value= %d, current-soc = %d\n", __func__, charger_limit_value, soc);
-	printk(" %s, limit-flag= %d\n", __func__, charger_limit_enable_flag);
+	printk("%s, limit-flag= %d\n", __func__, charger_limit_enable_flag);
 
 	return size;
 }
@@ -2493,32 +2502,25 @@ static const struct file_operations charger_limit_proc_ops = {
     .write = charger_limit_write_proc,
 };
 
-
 static int init_proc_charger_limit(void)
 {
-	int ret =0 ;
+	int ret = 0;
 
 	limit_enbale_entry = proc_create(CHARGER_LIMIT_EN_PROC_FILE, 0666, NULL, &charger_limit_enbale_proc_ops);
 
-	if (limit_enbale_entry == NULL)
-	{
+	if (limit_enbale_entry == NULL) {
 		printk("create_proc entry %s failed\n", CHARGER_LIMIT_EN_PROC_FILE);
 		return -ENOMEM;
-	}
-	else
-	{
+	} else {
 		printk("create proc entry %s success", CHARGER_LIMIT_EN_PROC_FILE);
 		ret = 0;
 	}
 	limit_entry = proc_create(CHARGER_LIMIT_PROC_FILE, 0666, NULL, &charger_limit_proc_ops);
 
-	if (limit_entry == NULL)
-	{
+	if (limit_entry == NULL) {
 		printk("create_proc entry %s failed\n", CHARGER_LIMIT_PROC_FILE);
 		return -ENOMEM;
-	}
-	else
-	{
+	} else {
 		printk("create proc entry %s success", CHARGER_LIMIT_PROC_FILE);
 		ret = 0;
 	}
@@ -3079,7 +3081,7 @@ static struct platform_driver smb2_driver = {
 		.owner		= THIS_MODULE,
 		.of_match_table	= match_table,
 /* Huaqin add for ZQL1650-68 systme suspend 1 min run sw jeita by fangaijun at 2018/02/06 start */
-		.pm			= &smb2_pm_ops,
+		.pm		= &smb2_pm_ops,
 /* Huaqin add for ZQL1650-68 systme suspend 1 min run sw jeita by fangaijun at 2018/02/06 end */
 	},
 	.probe		= smb2_probe,

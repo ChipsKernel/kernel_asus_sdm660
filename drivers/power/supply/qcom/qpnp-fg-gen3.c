@@ -169,8 +169,8 @@
 #define FILE_OP_READ   0
 #define FILE_OP_WRITE   1
 
-#define	BATTERY_HEALTH_UPGRADE_TIME 1 //ASUS_BS battery health upgrade
-#define	BATTERY_METADATA_UPGRADE_TIME 60 //ASUS_BS battery health upgrade
+#define BATTERY_HEALTH_UPGRADE_TIME 1 //ASUS_BS battery health upgrade
+#define BATTERY_METADATA_UPGRADE_TIME 60 //ASUS_BS battery health upgrade
 #define BAT_HEALTH_DATA_OFFSET  0x0
 #define BAT_HEALTH_DATA_MAGIC  0x86
 #define BAT_HEALTH_DATA_BACKUP_MAGIC 0x87
@@ -196,7 +196,7 @@ static struct BAT_HEALTH_DATA g_bat_health_data = {
     .bat_current_avg = 0,
     .accumulate_time = 0,
     .accumulate_current = 0,
-   .bat_health = 0
+    .bat_health = 0
 };
 static struct BAT_HEALTH_DATA_BACKUP g_bat_health_data_backup[BAT_HEALTH_NUMBER_MAX] = {
 	{"", 0},
@@ -2233,7 +2233,15 @@ static int fg_adjust_recharge_soc(struct fg_chip *chip)
 				chip->recharge_soc_adjusted = true;
 			} else {
 				/* adjusted already, do nothing */
-				return 0;
+				if (chip->health != POWER_SUPPLY_HEALTH_GOOD)
+					return 0;
+
+				/*
+				 * Device is out of JEITA so restore the
+				 * default value
+				 */
+				new_recharge_soc = recharge_soc;
+				chip->recharge_soc_adjusted = false;
 			}
 		} else {
 			if (!chip->recharge_soc_adjusted)
@@ -5009,7 +5017,7 @@ static int backup_bat_health(void)
 	int health_t;
 	int count=0, i=0;
 	unsigned long long bat_health_accumulate=0;
-	
+
 	getnstimeofday(&ts);
 	rtc_time_to_tm(ts.tv_sec,&tm);
 
@@ -5033,7 +5041,7 @@ static int backup_bat_health(void)
 			printk("%s %02d:%d\n",__FUNCTION__,i,g_bat_health_data_backup[i].health);
 		}
 	}
-	BAT_DBG(" ========================\n");
+	BAT_DBG("========================\n");
 	if(count==0){
 		BAT_DBG("battery health value is empty\n");
 		return -1;
@@ -5178,7 +5186,7 @@ static void update_battery_health(struct fg_chip *chip){
 			T = g_bat_health_data.end_time - g_bat_health_data.start_time;
 			health_t = (g_bat_health_data.bat_current_avg*T)*10/(unsigned long long)(ZS630KL_DESIGNED_CAPACITY*delta_p)/(unsigned long long)360;
 			g_bat_health_data.bat_health = (int)((health_t + 5)/10);
-			
+
 			BAT_DBG("battery health = (%d,%d), T(%lu), bat_current_avg(%llu)", g_bat_health_data.bat_health, g_bat_health_avg, T, g_bat_health_data.bat_current_avg/1000);
 			backup_bat_health();
 			batt_health_csc_backup();
